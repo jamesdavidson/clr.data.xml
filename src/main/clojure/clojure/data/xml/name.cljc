@@ -13,6 +13,12 @@
                        [impl :refer [export-api]]
                        [protocols :as protocols :refer [AsQName]]))
             (:import (clojure.lang Namespace Keyword))]
+      :cljr [(:require [clojure.string :as str]
+                       [clojure.data.xml.clr.name :as clr]
+                       (clojure.data.xml
+                        [impl :refer [export-api]]
+                        [protocols :as protocols :refer [AsQName]]))
+             (:import (clojure.lang Namespace Keyword))]
       :cljs [(:require-macros
               [clojure.data.xml.impl :refer [export-api]])
              (:require [clojure.string :as str]
@@ -32,7 +38,7 @@
 
 (defn symbol-uri [ss]
   (let [du (decode-uri (str ss))]
-    (if (.startsWith du "xmlns.")
+    (if (str/starts-with? du "xmlns.")
       (subs du 6)
       (throw (ex-info "Uri symbol not valid" {:sym ss})))))
 
@@ -72,7 +78,7 @@
   (qname-local [kw] (name kw))
   (qname-uri [kw]
     (if-let [ns (namespace kw)]
-      (if (.startsWith ns "xmlns.")
+      (if (str/starts-with? ns "xmlns.")
         (decode-uri (subs ns 6))
         (case ns
           "xmlns" xmlns-uri
@@ -96,7 +102,8 @@
   [uri]
   (println  "echo \"(ns" (str (uri-symbol uri) ")\" >") (uri-file uri)))
 
-#?(:clj
+#?(:cljs nil
+   :default
    (defn alias-uri
      "Define a Clojure namespace aliases for xmlns uris.
 
@@ -180,6 +187,10 @@
           (char-array
            (map char
                 (range (int \a) (inc (int \z))))))
+   :cljr (def ^:private ^|System.Char[]| prefix-alphabet
+          (char-array
+           (map char
+                (range (int \a) (inc (int \z))))))
    :cljs (def ^:private prefix-alphabet
            (apply str (map js/String.fromCharCode
                            (range (.charCodeAt "a" 0)
@@ -199,11 +210,12 @@
         (gen-prefix c)))
   ([n]
    (let [cnt (alength prefix-alphabet)
-         sb #?(:clj (StringBuilder.) :cljs (StringBuffer.))]
+         sb #?(:cljs (StringBuffer.) :default (StringBuilder.))]
      (loop [n* n]
        (let [ch (mod n* cnt)
              n** (quot n* cnt)]
-         (.append sb (aget prefix-alphabet ch))
+         #?(:cljr (.Append sb (aget prefix-alphabet ch))
+            :default (.append sb (aget prefix-alphabet ch)))
          (if (pos? n**)
            (recur n**)
            (str sb)))))))

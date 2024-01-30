@@ -28,6 +28,7 @@
 
 (export-api
  #?@(:clj  [jvm/parse-qname jvm/encode-uri jvm/decode-uri]
+     :cljr [clr/parse-qname clr/encode-uri clr/decode-uri]
      :cljs [jsn/parse-qname jsn/encode-uri jsn/decode-uri]))
 
 ;; protocol functions can be redefined by extend-*, so we wrap

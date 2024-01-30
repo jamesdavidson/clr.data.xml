@@ -9,9 +9,11 @@
 (ns clojure.data.xml.impl
   "Shared private code for data.xml namespaces"
   {:author "Herwig Hochleitner"}
-  (:import
-    [java.util Base64]
-    [java.nio.charset StandardCharsets]))
+  #?@(:clj [(:import
+              [java.util Base64]
+              [java.nio.charset StandardCharsets])]
+      :cljr [(:import
+               [System.Text Encoding])]))
 
 (defn- var-form? [form]
   (and (seq? form) (= 'var (first form))))
@@ -60,10 +62,19 @@
   see clojure.core.reducers"
   [exp then else]
   (if (try (eval exp)
-           (catch Throwable _ false))
+           (catch #?(:clj Throwable :cljr Exception) _ false))
     `(do ~then)
     `(do ~else)))
 
-(defn b64-encode [^bytes ba]
-  (let [encoder (Base64/getEncoder)]
-    (String. (.encode encoder ba) StandardCharsets/ISO_8859_1)))
+#?(:clj
+   (defn b64-encode [^bytes ba]
+     (let [encoder (Base64/getEncoder)]
+       (String. (.encode encoder ba) StandardCharsets/ISO_8859_1)))
+
+   :cljr
+   ; we can use ASCII on CLR because using ISO-8859-1 is just a JVM perf improvement
+   ; https://stackoverflow.com/questions/29916494/why-jdk8s-base64-uses-iso-8859-1
+   (defn b64-encode
+    "bytes to base64 string"
+    ([^|System.Byte[]| ba]
+               (.GetString Encoding/ASCII ba))))

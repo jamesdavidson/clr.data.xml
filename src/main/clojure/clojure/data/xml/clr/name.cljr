@@ -1,0 +1,38 @@
+;   Copyright (c) Rich Hickey. All rights reserved.
+;   The use and distribution terms for this software are covered by the
+;   Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0.php)
+;   which can be found in the file epl-v10.html at the root of this distribution.
+;   By using this software in any fashion, you are agreeing to be bound by
+;   the terms of this license.
+;   You must not remove this notice, or any other, from this software.
+
+(ns clojure.data.xml.clr.name
+  (:require (clojure.data.xml
+             [protocols :refer [AsQName qname-uri qname-local]])
+            [clojure.string :as str])
+  (:import [System.Xml XmlQualifiedName]))
+
+(extend-protocol AsQName
+  XmlQualifiedName
+  (qname-local [qname] (.Name qname))
+  (qname-uri   [qname] (.Namespace qname)))
+
+(def ^XmlQualifiedName parse-qname
+  (memoize
+   (fn [s]
+     ;; TODO weakly memoize this?
+     (let [[_ uri local] (re-matches #"{(.+)}(.+)" s)]
+       (new XmlQualifiedName local uri)))))
+
+(extend-protocol AsQName
+  String
+  (qname-local [s]
+    (.Name (parse-qname s)))
+  (qname-uri [s]
+    (.Namespace (parse-qname s))))
+
+(definline decode-uri [^String ns]
+  `(System.Web.HttpUtility/UrlDecode ~ns System.Text.Encoding/UTF8))
+
+(definline encode-uri [^String uri]
+  `(System.Web.HttpUtility/UrlEncode ~uri System.Text.Encoding/UTF8))

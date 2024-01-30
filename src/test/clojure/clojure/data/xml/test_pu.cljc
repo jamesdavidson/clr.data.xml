@@ -8,7 +8,7 @@
   (is (= name/xmlns-uri (pu/get pu/EMPTY "xmlns")))
   (is (= ["xml"] (pu/get-prefixes pu/EMPTY name/xml-uri)))
   (is (= ["xmlns"] (pu/get-prefixes pu/EMPTY name/xmlns-uri)))
-  (are [p u] (thrown? #?(:clj Exception :cljs js/Error) (pu/assoc pu/EMPTY p u))
+  (are [p u] (thrown? #?(:clj Exception :cljr Exception :cljs js/Error) (pu/assoc pu/EMPTY p u))
     "xml" "_"
     "xmlns" "_"
     "_" name/xml-uri

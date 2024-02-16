@@ -14,7 +14,13 @@
                                  Associative Seqable IPersistentMap
                                  APersistentMap RT MapEquivalence MapEntry)
                    (java.io Serializable Writer)
-                   (java.util Map Iterator))))
+                   (java.util Map Iterator))
+     :cljr (:import (clojure.lang IHashEq IObj ILookup IKeywordLookup Counted
+                                  Associative Seqable IPersistentMap
+                                  APersistentMap RT MapEquivalence MapEntry)
+                    (System.Runtime.Serialization ISerializable)
+                    (System.IO TextWriter)
+                    (System.Collections IEnumerable IEnumerator))))
 
 ;; Parsed data format
 ;; Represents a node of an XML tree
@@ -37,7 +43,22 @@
    (next [_]
      (let [f (first fields)]
        (set! fields (next fields))
-       (MapEntry. f (get el f))))))
+       (MapEntry. f (get el f)))))
+ :cljr
+ (deftype ElementIterator [el ^:volatile-mutable fields ^:volatile-mutable Current]
+   IEnumerator
+   (Reset [_]
+     (do
+       (set! fields (keys el))
+       (let [f (first fields)]
+         (set! Current (MapEntry. f (get el f))))
+       nil))
+   (MoveNext [_]
+     (do
+       (if-let [f (second fields)]
+         (set! Current (MapEntry. f (get el f)))
+         (set! Current nil))
+       (set! fields (next fields))))))
 
 (deftype Element [tag attrs content meta]
 
@@ -51,6 +72,15 @@
     (hasheq [this] (APersistentMap/mapHasheq this))
     Iterable
     (iterator [this] (ElementIterator. this '(:tag :attrs :content)))]
+   :cljr
+   [;ISerializable
+    MapEquivalence
+    IHashEq
+    (hasheq [this] (APersistentMap/mapHasheq this))
+    IEnumerable
+    (GetEnumerator [this]
+      ^IEnumerator
+      (doto (new ElementIterator this '(:tag :attrs :content) nil) .Reset))]
    :cljs
    [ICloneable
     (-clone [_] (Element. tag attrs content meta))
@@ -61,8 +91,10 @@
                              ^boolean (js/cljs.core.equiv_map this other)))
     IIterable
     (-iterator [this] (RecordIter. 0 this 3 [:tag :attrs :content] (nil-iter)))])
+
   Object
-  (toString [_]
+  (#?(:cljr ToString :default toString)
+   [_]
     (let [qname (as-qname tag)]
       (apply str (concat ["<" qname]
                          (mapcat (fn [[n a]]
@@ -71,58 +103,79 @@
                          (if (seq content)
                            (concat [">"] content ["</" qname ">"])
                            ["/>"])))))
-  #?@(:clj
-      [(hashCode [this] (APersistentMap/mapHash this))
-       (equals [this other] (APersistentMap/mapEquals this other))
-       IPersistentMap
-       (equiv [this other] (APersistentMap/mapEquals this other))])
+
+;  #?@(:clj
+;      [(hashCode [this] (APersistentMap/mapHash this))
+;       (equals [this other] (APersistentMap/mapEquals this other))
+;       IPersistentMap
+;       (equiv [this other] (APersistentMap/mapEquals this other))]
+;      :cljr
+;      [;(HashCode [this] (APersistentMap/mapHash this))
+;       (Equals [this other] (APersistentMap/mapEquals this other))
+;       IPersistentMap
+;       (equiv [this other] (APersistentMap/mapEquals this other))])
 
   ;; Main collection interfaces, that are included in IPersistentMap,
   ;; but are separate protocols in cljs
 
-  #?(:cljs ILookup)
-  (#?(:clj valAt :cljs -lookup) [this k]
-    (#?(:clj .valAt :cljs -lookup)
+  #?(:cljs ILookup :cljr ILookup)
+  (#?(:clj valAt :cljr valAt :cljs -lookup) [this k]
+    (#?(:clj .valAt :cljr .valAt :cljs -lookup)
      this k nil))
-  (#?(:clj valAt :cljs -lookup) [this k nf]
+  (#?(:clj valAt :cljr valAt :cljs -lookup) [this k nf]
     (case k
       :tag tag
       :attrs attrs
       :content content
       nf))
-  #?(:cljs ICounted)
-  (#?(:clj count :cljs -count) [this] 3)
-  #?(:cljs ICollection)
-  (#?(:clj cons :cljs -conj) [this entry]
-    (conj (with-meta {:tag tag :attrs attrs :content content} meta)
-          entry))
-  #?(:cljs IAssociative)
-  (#?(:clj assoc :cljs -assoc) [this k v]
+  #?(:cljs ICounted :cljr Counted)
+  (#?(:default count :cljs -count) [this] 3)
+;  #?(:cljs ICollection)
+;  (#?(:clj cons :cljs -conj) [this entry]
+;    (conj (with-meta {:tag tag :attrs attrs :content content} meta)
+;          entry))
+  #?(:cljs IAssociative :cljr Associative)
+  (#?(:default assoc :cljs -assoc) [this k v]
     (case k
       :tag (Element. v attrs content meta)
       :attrs (Element. tag v content meta)
       :content (Element. tag attrs v meta)
       (with-meta {:tag tag :attrs attrs :content content k v} meta)))
-  #?(:cljs IMap)
-  (#?(:clj without :cljs -dissoc) [this k]
-    (with-meta
-      (case k
-        :tag {:attrs attrs :content content}
-        :attrs {:tag tag :content content}
-        :content {:tag tag :attrs attrs}
-        this)
-      meta))
+;  #?(:cljs IMap)
+;  (#?(:clj without :cljs -dissoc) [this k]
+;    (with-meta
+;      (case k
+;        :tag {:attrs attrs :content content}
+;        :attrs {:tag tag :content content}
+;        :content {:tag tag :attrs attrs}
+;        this)
+;      meta))
+;  #?@(:cljr
+;      [IPersistentMap
+;       (without [this k]
+;        (with-meta
+;          (case k
+;            :tag {:attrs attrs :content content}
+;            :attrs {:tag tag :content content}
+;            :content {:tag tag :attrs attrs}
+;            this)
+;          meta))])
   #?@(:cljs
       [ISeqable
        (-seq [this]
              (seq [[:tag tag] [:attrs attrs] [:content content]]))]
       :clj
-      [(seq [this] (iterator-seq (.iterator this)))])
+      [(seq [this] (iterator-seq (.iterator this)))]
+      :cljr
+      [Seqable
+       (seq [this] (iterator-seq ^IEnumerator (.GetEnumerator this)))])
 
-  #?(:clj (empty [_] (Element. tag {} [] {})))
   #?@(:cljs
-      [IEmptyableCollection
-       (-empty [_] (Element. tag {} [] {}))])
+      [IEmptyableCollection]
+      :clj nil
+      :cljr
+      [clojure.lang.IPersistentCollection])
+  (empty [_] (Element. tag {} [] {}))
 
   ;; j.u.Map and included interfaces
   #?@(:clj
@@ -138,10 +191,10 @@
 
   ;; Metadata interface
 
-  #?(:clj IObj :cljs IMeta)
-  (#?(:clj meta :cljs -meta) [this] meta)
-  #?(:cljs IWithMeta)
-  (#?(:clj withMeta :cljs -with-meta) [this next-meta]
+  #?(:default IObj :cljs IMeta)
+  (#?(:default meta :cljs -meta) [this] meta)
+  #?(:cljs IWithMeta :cljr IObj)
+  (#?(:default withMeta :cljs -with-meta) [this next-meta]
     (Element. tag attrs content next-meta))
 
   ;; cljs printing is protocol-based
@@ -177,7 +230,22 @@
        (.write writer " ")
        (print-method c writer))
      (.write writer "]"))
-   (.write writer "}")))
+   (.write writer "}"))
+ :cljr
+ (defmethod print-method Element [{:keys [tag attrs content]} ^TextWriter writer]
+   (.Write writer "#xml/element{:tag ")
+   (print-method tag writer)
+   (when-not (empty? attrs)
+     (.Write writer ", :attrs ")
+     (print-method attrs writer))
+   (when-not (empty? content)
+     (.Write writer ", :content [")
+     (print-method (first content) writer)
+     (doseq [c (next content)]
+       (.Write writer " ")
+       (print-method c writer))
+     (.Write writer "]"))
+   (.Write writer "}")))
 
 (defrecord CData [content])
 (defrecord Comment [content])
@@ -189,7 +257,8 @@
   ([tag attrs content]
    (Element. tag (or attrs {}) (remove nil? content) nil)))
 
-#?(:clj
+#?(:cljs nil
+   :default
    ;; Compiler macro for inlining the two constructors
    (alter-meta! #'element* assoc :inline
                 (fn

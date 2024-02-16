@@ -47,18 +47,15 @@
  :cljr
  (deftype ElementIterator [el ^:volatile-mutable fields ^:volatile-mutable Current]
    IEnumerator
-   (Reset [_]
-     (do
-       (set! fields (keys el))
-       (let [f (first fields)]
-         (set! Current (MapEntry. f (get el f))))
-       nil))
+   (get_Current [_] Current)
+   (Reset [_] (throw (new Exception "not implemented")))
    (MoveNext [_]
-     (do
-       (if-let [f (second fields)]
+     (if (some? fields)
+       (let [f (first fields)]
          (set! Current (MapEntry. f (get el f)))
-         (set! Current nil))
-       (set! fields (next fields))))))
+         (set! fields (next fields))
+         true)
+       (set! Current nil)))))
 
 (deftype Element [tag attrs content meta]
 
@@ -78,9 +75,7 @@
     IHashEq
     (hasheq [this] (APersistentMap/mapHasheq this))
     IEnumerable
-    (GetEnumerator [this]
-      ^IEnumerator
-      (doto (new ElementIterator this '(:tag :attrs :content) nil) .Reset))]
+    (GetEnumerator [this] (new ElementIterator this '(:tag :attrs :content) nil))]
    :cljs
    [ICloneable
     (-clone [_] (Element. tag attrs content meta))

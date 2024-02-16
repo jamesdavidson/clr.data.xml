@@ -15,8 +15,8 @@
                                  APersistentMap RT MapEquivalence MapEntry)
                    (java.io Serializable Writer)
                    (java.util Map Iterator))
-     :cljr (:import (clojure.lang IHashEq IObj ILookup IKeywordLookup Counted
-                                  Associative Seqable IPersistentMap
+     :cljr (:import (clojure.lang IHashEq IObj IMeta ILookup IKeywordLookup
+                                  Counted Associative Seqable IPersistentMap
                                   APersistentMap RT MapEquivalence MapEntry)
                     (System.Runtime.Serialization ISerializable)
                     (System.IO TextWriter)
@@ -186,10 +186,10 @@
 
   ;; Metadata interface
 
-  #?(:default IObj :cljs IMeta)
-  (#?(:default meta :cljs -meta) [this] meta)
+  #?(:clj IObj :cljr IMeta :cljs IMeta)
+  (#?(:clj meta :cljr meta :cljs -meta) [this] meta)
   #?(:cljs IWithMeta :cljr IObj)
-  (#?(:default withMeta :cljs -with-meta) [this next-meta]
+  (#?(:clj withMeta :cljr withMeta :cljs -with-meta) [this next-meta]
     (Element. tag attrs content next-meta))
 
   ;; cljs printing is protocol-based

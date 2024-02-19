@@ -36,14 +36,14 @@
   (as-elements [k]
     [(element k)])
 
-  java.lang.String
+  #?(:clj java.lang.String :cljr System.String)
   (as-elements [s]
     [s])
 
   nil
   (as-elements [_] nil)
 
-  java.lang.Object
+  #?(:clj java.lang.Object :cljr System.Object)
   (as-elements [o]
     [(str o)]))
 
@@ -69,7 +69,7 @@
   (let [[root & more] (sexps-as-fragment sexp)]
     (when more
       (throw
-       (IllegalArgumentException.
+       (#?(:clj IllegalArgumentException. :cljr System.Exception.)
         "Cannot have multiple root elements; try creating a fragment instead")))
     root))
 

@@ -6,5 +6,6 @@ rep --port 1667 '
  (load-file "src/main/clojure/clojure/data/xml/name.cljc")
  (load-file "src/main/clojure/clojure/data/xml/pu_map.cljc")
  (load-file "src/main/clojure/clojure/data/xml/node.cljc")
+ (load-file "src/main/clojure/clojure/data/xml/prxml.cljc")
  :ok
 )'

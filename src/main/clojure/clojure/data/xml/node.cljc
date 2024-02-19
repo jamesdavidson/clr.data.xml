@@ -258,9 +258,9 @@
    (alter-meta! #'element* assoc :inline
                 (fn
                   ([tag attrs content meta]
-                   `(Element. ~tag (or ~attrs {}) (remove nil? ~content) ~meta))
+                   `(clojure.data.xml.node.Element. ~tag (or ~attrs {}) (remove nil? ~content) ~meta))
                   ([tag attrs content]
-                   `(Element. ~tag (or ~attrs {}) (remove nil? ~content) nil)))))
+                   `(clojure.data.xml.node.Element. ~tag (or ~attrs {}) (remove nil? ~content) nil)))))
 
 (defn element
   "Create an xml Element from content varargs"

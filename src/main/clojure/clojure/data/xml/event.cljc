@@ -17,9 +17,11 @@
             [clojure.data.xml.pu-map :as pu])
   (:import (clojure.data.xml.node Element CData Comment)
            (clojure.lang Sequential IPersistentMap Keyword)
-           (java.net URI URL)
-           (java.util Date)
-           (javax.xml.namespace QName)))
+           #?@(:clj [(java.net URI URL)
+                     (java.util Date)
+                     (javax.xml.namespace QName)]
+               :cljr [(System Uri)
+                      (System.Xml XmlQualifiedName)])))
 
 (definline element-nss* [element]
   `(get (meta ~element) :clojure.data.xml/nss pu/EMPTY))
@@ -65,9 +67,10 @@
    (StartElementEvent EmptyElementEvent EndElementEvent CharsEvent CDataEvent CommentEvent)
    {:gen-event identity
     :next-events second-arg}
-   (String Boolean Number (Class/forName "[B") Date URI URL nil)
+   #?(:clj (String Boolean Number (Class/forName "[B") Date URI URL nil)
+      :cljr (String Boolean ValueType |System.Byte[]| #_Date Uri nil))
    string-event-generation
-   (Keyword QName) qname-event-generation
+   (Keyword #?(:clj QName :cljr XmlQualifiedName)) qname-event-generation
    CData
    {:gen-event (comp ->CDataEvent :content)
     :next-events second-arg}
@@ -75,12 +78,13 @@
    {:gen-event (comp ->CommentEvent :content)
     :next-events second-arg}
    (IPersistentMap Element) elem-event-generation)
-  (compile-if
-   (Class/forName "java.time.Instant")
-   (extend java.time.Instant
-     EventGeneration
-     string-event-generation)
-   nil))
+
+  #?(:clj (compile-if
+           (Class/forName "java.time.Instant")
+           (extend java.time.Instant
+             EventGeneration
+             string-event-generation)
+           nil)))
 
 (extend-protocol EventGeneration
   Sequential

@@ -1,0 +1,33 @@
+;   Copyright (c) Rich Hickey. All rights reserved.
+;   The use and distribution terms for this software are covered by the
+;   Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0.php)
+;   which can be found in the file epl-v10.html at the root of this distribution.
+;   By using this software in any fashion, you are agreeing to be bound by
+;   the terms of this license.
+;   You must not remove this notice, or any other, from this software.
+
+(ns clojure.data.xml.clr.pprint
+  (:require [clojure.clr.io :as io])
+  (:import
+    [System.Xml XmlWriter XmlWriterSettings Xsl.XslCompiledTransform]))
+   (javax.xml.transform Transformer OutputKeys TransformerFactory)
+   (java.io Writer StringReader StringWriter)
+   (javax.xml.transform.stream StreamSource StreamResult)))
+
+(defn ^XslCompiledTransform indenting-transformer []
+  (let [xct (XslCompiledTransform.)
+        xws (.OutputSettings xct)]
+    (set! (.Indent xws) true)
+  xct))
+
+; (System.Xml.XmlTextWriter/Create (System.IO.MemoryStream. (byte-array (map byte (range 65 70)))) (new XmlWriterSettings))
+
+
+;; returns nil
+(defn indent-xml
+  [xml-str ^System.IO.TextWriter writer]
+  (let [source (io/input-stream (.GetBytes System.Text.Encoding/UTF8 xml-str))
+        result (StreamResult. writer)]
+    (.transform (indenting-transformer) source result)))
+
+

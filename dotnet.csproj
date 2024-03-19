@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net7.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Clojure" Version="1.12.0-alpha8" />
+    <PackageReference Include="clojure.tools.namespace" Version="1.4.4" />
+    <PackageReference Include="clojure.tools.nrepl" Version="0.1.0-alpha1" />
+    <PackageReference Include="clojure.test.check" Version="1.1.1" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
+  </ItemGroup>
+
+</Project>

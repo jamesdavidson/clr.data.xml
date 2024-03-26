@@ -8,7 +8,9 @@ rep --port 1667 '
  (load-file "src/main/clojure/clojure/data/xml/node.cljc")
  (load-file "src/main/clojure/clojure/data/xml/prxml.cljc")
  (load-file "src/main/clojure/clojure/data/xml/event.cljc")
+ (assembly-load "Microsoft.Extensions.Logging")
  (assembly-load "Microsoft.Extensions.Logging.Console")
- ;(load-file "src/main/clojure/clojure/data/xml/emit.cljc")
+ (assembly-load "Microsoft.Extensions.Logging.Abstractions")
+ (load-file "src/main/clojure/clojure/data/xml/clr/emit.cljr")
  :ok
 )'

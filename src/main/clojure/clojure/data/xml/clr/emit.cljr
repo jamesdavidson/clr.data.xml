@@ -15,13 +15,13 @@
              [protocols :refer [AsXmlString xml-str]]
              [impl :refer [extend-protocol-fns b64-encode compile-if]]
              event)
+            [clojure.clr.io :as io]
             [clojure.string :as str])
-  (:import ;(java.io OutputStreamWriter Writer StringWriter)
-           ;(java.nio.charset Charset)
-           ;(java.util.logging Logger Level)
-           (System.Xml XmlWriter XmlQualifiedName)
-           ;(javax.xml.namespace NamespaceContext QName)
-           ;(javax.xml.stream XMLStreamWriter XMLOutputFactory)
+  (:import (System.IO StreamWriter StringWriter TextWriter) ;(java.io StreamWriter Writer StringWriter)
+           (System.Text Encoding) ;(java.nio.charset Charset)
+           (Microsoft.Extensions.Logging LoggerExtensions LoggerFactory ILoggingBuilder LogLevel) ;(java.util.logging Logger Level)
+           (System.Xml XmlQualifiedName) ;(javax.xml.namespace NamespaceContext QName)
+           (System.Xml XmlWriter XmlTextWriter) ;(javax.xml.stream XmlWriter XMLOutputFactory)
            ;(javax.xml.transform OutputKeys Transformer
            ;                     TransformerFactory)
            (clojure.data.xml.event StartElementEvent EmptyElementEvent EndElementEvent CharsEvent CDataEvent CommentEvent QNameEvent)
@@ -31,17 +31,32 @@
            ;(java.text DateFormat SimpleDateFormat)
            ))
 
-(def logger (Logger/getLogger "clojure.data.xml"))
+(def logger-factory ; TODO fix the b.AddConsole() bit or sort out DI
+  (LoggerFactory/Create
+    (sys-action [ILoggingBuilder]
+                [b] nil)))
+
+(def ilogger (.CreateLogger logger-factory "clojure.data.xml"))
+
+(defn log [ilogger level msg]
+  (let [objs (object-array 0)]
+    (case level
+     LogLevel/Critical (LoggerExtensions/LogCritical ilogger msg objs)
+     LogLevel/Debug (LoggerExtensions/LogDebug ilogger msg objs)
+     LogLevel/Error (LoggerExtensions/LogError ilogger msg objs)
+     LogLevel/Information (LoggerExtensions/LogInformation ilogger msg objs)
+     LogLevel/Trace (LoggerExtensions/LogTrace ilogger msg objs)
+     LogLevel/Warning (LoggerExtensions/LogWarning ilogger msg objs))))
 
 (defprotocol EventEmit
-  (emit-event [event ^XMLStreamWriter writer prefix-uri-stack]))
+  (emit-event [event ^XmlWriter writer prefix-uri-stack]))
 
-(defn check-stream-encoding [^OutputStreamWriter stream xml-encoding]
-  (when (not= (Charset/forName xml-encoding) (Charset/forName (.getEncoding stream)))
-    (throw (ex-info (str "Output encoding of writer (" (.getEncoding stream)
+(defn check-stream-encoding [^StreamWriter stream xml-encoding]
+  (when (not= (Encoding/GetEncoding xml-encoding) (Encoding/GetEncoding (.Encoding stream)))
+    (throw (ex-info (str "Output encoding of writer (" (.Encoding stream)
                          ") doesn't match declaration ("
                          xml-encoding ")")
-                    {:stream-encoding (.getEncoding stream)
+                    {:stream-encoding (.Encoding stream)
                      :declared-encoding xml-encoding}))))
 
 (defn- prefix-for [qn pu]
@@ -51,27 +66,27 @@
                        :uri (qname-uri qn)}))))
 
 (defn- attr-str [value pu]
-  (if (or (keyword? value) (instance? QName value))
+  (if (or (keyword? value) (instance? XmlQualifiedName value))
     (str (prefix-for value pu) ":" (qname-local value))
     (xml-str value)))
 
-(defn- emit-attrs [^XMLStreamWriter writer pu attrs]
+(defn- emit-attrs [^XmlWriter writer pu attrs]
   (reduce-kv
    (fn [_ attr value]
      (let [uri (qname-uri attr)
            local (qname-local attr)]
        (if (str/blank? uri)
-         (.writeAttribute writer                            local (attr-str value pu))
-         (.writeAttribute writer (pu/get-prefix pu uri) uri local (attr-str value pu))))
+         (.WriteAttribute writer                              local (attr-str value pu))
+         (.WriteAttribute writer (pu/get-prefix pu uri) local uri   (attr-str value pu))))
      _)
    nil attrs))
 
-(defn- emit-ns-attrs [^XMLStreamWriter writer parent-pu pu]
+(defn- emit-ns-attrs [^XmlWriter writer parent-pu pu]
   (pu/reduce-diff
    (fn [_ pf uri]
      (if (str/blank? pf)
-       (.writeDefaultNamespace writer uri)
-       (.writeNamespace writer pf uri))
+       nil ; (.writeDefaultNamespace writer uri) TODO find equivalent or refactor
+       (.WriteQualifiedName writer pf uri))
      _)
    nil parent-pu pu))
 
@@ -101,8 +116,8 @@
         tpu (if-let [uri (and (str/blank? tag-uri)
                               (pu/get tpu ""))]
               (do
-                (when (.isLoggable ^Logger logger Level/FINE)
-                  (.log ^Logger logger Level/FINE
+                (when (.IsEnabled ilogger LogLevel/Debug)
+                  (log ilogger LogLevel/Debug
                         (format "Default `xmlns=\"%s\"` had to be replaced with a `xmlns=\"\"` because of global element `%s`"
                                 uri tag-local)))
                 (-> tpu
@@ -111,26 +126,26 @@
               tpu)]
     (pu/persistent! tpu)))
 
-(defn- emit-start-tag [{:keys [attrs nss tag]} ^XMLStreamWriter writer prefix-uri-stack empty]
+(defn- emit-start-tag [{:keys [attrs nss tag]} ^XmlWriter writer prefix-uri-stack empty]
   (let [uri   (qname-uri tag)
         local (qname-local tag)
         parent-pu (first prefix-uri-stack)
         pu (compute-pu parent-pu nss (map qname-uri (keys attrs)) uri local)]
     (if empty
       (do (if (str/blank? uri)
-            (.writeEmptyElement writer local)
-            (.writeEmptyElement writer (pu/get-prefix pu uri) local uri))
+            (.WriteStartElement writer local)
+            (.WriteStartElement writer (pu/get-prefix pu uri) local uri))
           (emit-ns-attrs writer parent-pu pu)
           (emit-attrs writer pu attrs)
           prefix-uri-stack)
       (do (if (str/blank? uri)
-            (.writeStartElement writer local)
-            (.writeStartElement writer (pu/get-prefix pu uri) local uri))
+            (.WriteStartElement writer local)
+            (.WriteStartElement writer (pu/get-prefix pu uri) local uri))
           (emit-ns-attrs writer parent-pu pu)
           (emit-attrs writer pu attrs)
           (cons pu prefix-uri-stack)))))
 
-(defn- emit-cdata [^String cdata-str ^XMLStreamWriter writer]
+(defn- emit-cdata [^String cdata-str ^XmlWriter writer]
   (when-not (str/blank? cdata-str)
     (let [idx (.indexOf cdata-str "]]>")]
       (if (= idx -1)
@@ -147,35 +162,36 @@
   EndElementEvent
   (emit-event [ev writer pu-stack]
     (assert (next pu-stack) "balanced tags")
-    (.writeEndElement ^XMLStreamWriter writer)
+    (.writeEndElement ^XmlWriter writer)
     (next pu-stack))
   CharsEvent
-  (emit-event [{:keys [str]} writer s] (.writeCharacters ^XMLStreamWriter writer str) s)
+  (emit-event [{:keys [str]} writer s] (.writeCharacters ^XmlWriter writer str) s)
   CDataEvent
   (emit-event [{:keys [str]} writer s] (emit-cdata str writer) s)
   CommentEvent
-  (emit-event [{:keys [str]} writer s] (.writeComment ^XMLStreamWriter writer str) s)
+  (emit-event [{:keys [str]} writer s] (.writeComment ^XmlWriter writer str) s)
   QNameEvent
-  (emit-event [{:keys [qn]} ^XMLStreamWriter writer pu-stack]
+  (emit-event [{:keys [qn]} ^XmlWriter writer pu-stack]
     (.writeCharacters writer (prefix-for qn (first pu-stack)))
     (.writeCharacters writer ":")
     (.writeCharacters writer (qname-local qn))
     pu-stack))
 
-(def ^:private ^ThreadLocal thread-local-utc-date-format
-  ;; SimpleDateFormat is not thread-safe, so we use a ThreadLocal proxy for access.
-  ;; http://bugs.sun.com/bugdatabase/view_bug.do?bug_id=4228335
-  (proxy [ThreadLocal] []
-    (initialValue []
-      (doto (SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ss.SSS-00:00")
-        ;; RFC3339 says to use -00:00 when the timezone is unknown (+00:00 implies a known GMT)
-        (.setTimeZone (java.util.TimeZone/getTimeZone "GMT"))))))
+; (def ^:private ^ThreadLocal thread-local-utc-date-format
+;   ;; SimpleDateFormat is not thread-safe, so we use a ThreadLocal proxy for access.
+;   ;; http://bugs.sun.com/bugdatabase/view_bug.do?bug_id=4228335
+;   (proxy [ThreadLocal] []
+;     (initialValue []
+;       (doto (SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ss.SSS-00:00")
+;         ;; RFC3339 says to use -00:00 when the timezone is unknown (+00:00 implies a known GMT)
+;         (.setTimeZone (java.util.TimeZone/getTimeZone "GMT"))))))
 
 (extend-protocol-fns
  AsXmlString
  String {:xml-str identity}
- (Boolean Byte Character Short Integer Long Float Double
-  BigInteger BigDecimal BigInt URI URL nil) {:xml-str str})
+ (Boolean Byte Char Single Double Decimal
+  Int16 Int32 Int64 Int128 System.Uri nil)
+ {:xml-str str})
 
 (extend-protocol AsXmlString
   |System.Byte[]|
@@ -200,19 +216,18 @@
    Options:
     :encoding <str>          Character encoding to use
     :doctype  <str>          Document type (DOCTYPE) declaration to use"
-  [^Writer swriter events opts]
+  [swriter events opts]
   (binding [*gen-prefix-counter* 0]
-    (let [^XMLStreamWriter writer (-> (XMLOutputFactory/newInstance)
-                                      (.createXMLStreamWriter swriter))]
+    (let [writer (XmlWriter/Create swriter)]
 
-      (when (instance? OutputStreamWriter swriter)
+      (when (instance? StreamWriter swriter)
         (check-stream-encoding swriter (or (:encoding opts) "UTF-8")))
 
-      (.writeStartDocument writer (or (:encoding opts) "UTF-8") "1.0")
+      (.WriteStartDocument writer)
       (when-let [doctype (:doctype opts)]
-        (.writeDTD writer doctype))
+        (.WriteDocType writer doctype))
       (reduce #(emit-event %2 writer %1) [pu/EMPTY] events)
-      (.writeEndDocument writer)
+      (.WriteEndDocument writer)
       swriter)))
 
 (defn string-writer []
